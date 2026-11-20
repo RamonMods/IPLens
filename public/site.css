@@ -226,7 +226,16 @@ input:focus { box-shadow: inset 0 0 0 3px var(--azul); }
 .json summary::before { content: "+ "; color: var(--azul); }
 .json[open] summary::before { content: "− "; }
 .json pre { margin: 0; padding: 13px; max-height: 320px; overflow: auto; border-top: 1px solid var(--studio); font-family: var(--mono); font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
-.botao-copy { padding: 11px 14px; background: transparent; border: 1px solid var(--studio); font-family: var(--mono); font-size: 10px; cursor: pointer; }
+.botao-copy {
+  padding: 11px 14px;
+  background: #fff;
+  color: var(--studio);
+  border: 1px solid var(--studio);
+  font-family: var(--mono);
+  font-size: 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
 .botao-copy:hover { background: var(--azul); color: #fff; }
 
 /* --- recursos --- */
