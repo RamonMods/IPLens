@@ -21,32 +21,29 @@ GET /ping
 {
   "ip": "8.8.8.8",
   "hostname": "dns.google",
-  "location": {
-    "city": "Mountain View",
-    "region": "California",
-    "country": "US",
-    "continent": "North America",
-    "loc": "37.4223,-122.0850",
-    "timezone": "America/Los_Angeles"
+  "consultado_em": 1795000000,
+  "localizacao": {
+    "cidade": "Mountain View", "regiao": "California", "pais": "US",
+    "continente": "North America", "latitude": 37.4223, "longitude": -122.0850,
+    "fuso": "America/Los_Angeles", "cep": "94043", "moeda": "USD"
   },
-  "organization": {
-    "name": "Google LLC",
-    "isp": "Google LLC",
-    "asn": "AS15169",
-    "asn_name": "GOOGLE",
-    "ip_range": "NET-8.8.8.0-8"
+  "rede": {
+    "isp": "Google LLC", "organizacao": "Google LLC", "asn": "AS15169",
+    "asn_nome": "GOOGLE", "dominio": "google.com", "bloco": "NET-8.8.8.0-8"
   },
-  "security": {
-    "is_mobile": false,
-    "is_vpn": false,
-    "is_proxy": false,
-    "is_hosting": false,
-    "abuse_score": 0
+  "organizacao": { "nome": "Google LLC", "tipo": "Content Delivery Network" },
+  "seguranca": {
+    "is_mobile": false, "is_vpn": false, "is_proxy": false,
+    "is_tor": false, "is_relay": false, "is_hosting": false, "abuse_score": 0
   },
-  "whois_contacts": {
-    "abuse_email": "",
-    "tech_email": "",
-    "abuse_phone": ""
+  "contatos": { "abuse_email": "", "tech_email": "", "entidades": [] },
+  "rdap": { "handle": "NET-8.8.8.0-8", "eventos": [], "links": [] },
+  "fontes": {
+    "ipinfo": { "disponivel": true, "vazio": false, "dados": {} },
+    "ipapi": { "disponivel": true, "vazio": false, "dados": {} },
+    "ip-api": { "disponivel": true, "vazio": false, "dados": {} },
+    "abuseipdb": { "disponivel": false, "vazio": false, "dados": null },
+    "rdap_apnic": { "disponivel": true, "vazio": false, "dados": {} }
   }
 }
 ```

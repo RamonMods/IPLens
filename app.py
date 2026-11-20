@@ -1,6 +1,7 @@
 import os
 import json
 import socket
+import time
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 import requests
@@ -164,116 +165,168 @@ def query_rdap_apnic(ip: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _rdap_entidades(rdap: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Lista todas as entidades RDAP com papéis e contatos."""
+    if not isinstance(rdap, dict):
+        return []
+    saida = []
+    for entidade in rdap.get("entities", []):
+        contatos = []
+        vcard = entidade.get("vcardArray", [])
+        if len(vcard) > 1 and isinstance(vcard[1], list):
+            for item in vcard[1]:
+                if isinstance(item, list) and len(item) >= 4:
+                    contatos.append({"tipo": item[0], "valor": item[3]})
+        saida.append({
+            "handle": entidade.get("handle"),
+            "roles": entidade.get("roles", []),
+            "contatos": contatos,
+            "eventos": entidade.get("events", []),
+        })
+    return saida
+
+
 def build_result(ip: str, srcs: Dict[str, Optional[Dict[str, Any]]]) -> Dict[str, Any]:
+    """Normaliza e devolve o máximo de campos de todas as fontes consultadas."""
     def pick(*keys):
         for s in srcs.values():
             if not s:
                 continue
             for k in keys:
-                if k in s and s[k] not in (None, "", 0): 
+                if k in s and s[k] not in (None, "", 0, False):
                     return s[k]
         return None
+
+    rdap = srcs.get("rdap_apnic") or {}
+    ipinfo = srcs.get("ipinfo") or {}
+    ipapi = srcs.get("ipapi") or {}
+    ipapi_co = srcs.get("ip-api") or {}
+    abuse = safe_get(srcs.get("abuseipdb") or {}, "data") or {}
 
     lat = pick("latitude", "lat")
     lon = pick("longitude", "lon")
     loc = f"{lat},{lon}" if lat and lon else ""
-    rdap_data = srcs.get("rdap_apnic")
-    
-    full_country_name = pick("country") or "" 
-    country_code = pick("countryCode", "country") or ""
-    if not full_country_name and country_code:
-        full_country_name = country_code
 
-    asn_num = ""
-    asn_name = ""
-    as_field = pick("as")
+    as_field = pick("as") or ""
+    asn_num, asn_name = "", ""
     if isinstance(as_field, str):
-        parts = as_field.split(" ", 1)
-        if parts and parts[0].upper().startswith("AS"):
-            asn_num = parts[0]
-            asn_name = parts[1] if len(parts) > 1 else "" 
+        partes = as_field.split(" ", 1)
+        if partes and partes[0].upper().startswith("AS"):
+            asn_num = partes[0]
+            asn_name = partes[1] if len(partes) > 1 else ""
         else:
             asn_name = as_field
+    asn_num = pick("asn") or asn_num
     asn_name = pick("asname") or asn_name
 
-    company_obj = {"name": "", "domain": "", "type": ""}
-    
-    rdap_org_name = safe_get(rdap_data, "name")
-    company_obj["name"] = pick("isp", "org") or rdap_org_name or ""
-    
-    ipinfo_company = safe_get(srcs.get("ipinfo") or {}, "company")
-    if isinstance(ipinfo_company, dict):
-        company_obj["name"] = ipinfo_company.get("name") or company_obj["name"]
-        company_obj["domain"] = ipinfo_company.get("domain") or ""
-        company_obj["type"] = ipinfo_company.get("type") or ""
-
-    privacy = {"mobile": False, "vpn": False, "proxy": False, "tor": False, "relay": False, "hosting": False}
-    privacy["mobile"] = pick("mobile") or False 
-    privacy["proxy"] = pick("proxy") or False
-    privacy["hosting"] = pick("hosting") or False
-
-    for sname in ("ipinfo", "ipapi"):
-        s = srcs.get(sname)
-        if not s:
-            continue
-        p = s.get("privacy")
-        if isinstance(p, dict):
-            for k in ("vpn", "proxy", "tor", "relay", "hosting"):
-                if p.get(k) is True: 
-                    privacy[k] = True
-    
-    abuse_score = safe_get(srcs.get("abuseipdb") or {}, "data", "abuseConfidenceScore") or 0
-    
-    whois_contacts = {
-        "abuse_email": "",
-        "tech_email": "",
-        "abuse_phone": "",
+    company = safe_get(ipinfo, "company") or {}
+    organizacao = {
+        "nome": pick("isp", "org") or safe_get(rdap, "name") or "",
+        "isp": pick("isp") or "",
+        "dominio": company.get("domain") or abuse.get("domain") or "",
+        "tipo": company.get("type") or "",
+        "asn": asn_num,
+        "asn_nome": asn_name,
+        "as_string": as_field,
+        "bloco_rdap": safe_get(rdap, "handle") or "",
+        "pais_rdap": safe_get(rdap, "country") or "",
+        "nome_rdap": safe_get(rdap, "name") or "",
     }
-    
-    if rdap_data:
-        whois_contacts["abuse_email"] = get_contact_from_rdap(rdap_data, "abuse", "email")
-        whois_contacts["tech_email"] = get_contact_from_rdap(rdap_data, "technical", "email")
-        
-        abuse_phone = get_contact_from_rdap(rdap_data, "abuse", "tel")
-        if not abuse_phone:
-             abuse_phone = get_contact_from_rdap(rdap_data, "registrant", "tel")
-             
-        whois_contacts["abuse_phone"] = abuse_phone
-        
-        print(f"RDAP Contacts Found: {whois_contacts}")
 
+    privacidade = {}
+    for origem in (ipinfo, ipapi, ipapi_co):
+        p = origem.get("privacy")
+        if isinstance(p, dict):
+            for chave, valor in p.items():
+                if valor is True:
+                    privacidade[chave] = True
+    for chave in ("mobile", "proxy", "hosting"):
+        if pick(chave):
+            privacidade[chave] = True
+    seguranca = {
+        "is_mobile": bool(pick("mobile")),
+        "is_vpn": bool(privacidade.get("vpn")),
+        "is_proxy": bool(pick("proxy") or privacidade.get("proxy")),
+        "is_tor": bool(privacidade.get("tor")),
+        "is_relay": bool(privacidade.get("relay")),
+        "is_hosting": bool(pick("hosting") or privacidade.get("hosting")),
+        "abuse_score": safe_get(srcs.get("abuseipdb") or {}, "data", "abuseConfidenceScore") or 0,
+        "abuse_total_reports": abuse.get("totalReports"),
+        "abuse_last_reported": abuse.get("lastReportedAt"),
+        "abuse_usage_type": abuse.get("usageType"),
+        "abuse_domain": abuse.get("domain"),
+        "abuse_isp": abuse.get("isp"),
+        "abuse_categories": abuse.get("categories", []),
+    }
+
+    contatos = {
+        "abuse_email": get_contact_from_rdap(rdap, "abuse", "email") or "",
+        "tech_email": get_contact_from_rdap(rdap, "technical", "email") or "",
+        "abuse_phone": get_contact_from_rdap(rdap, "abuse", "tel")
+        or get_contact_from_rdap(rdap, "registrant", "tel") or "",
+        "entidades": _rdap_entidades(rdap),
+    }
 
     return {
         "ip": ip,
-        "hostname": pick("reverse", "hostname") or reverse_dns(ip) or "", 
-        
-        "location": {
-            "city": pick("city") or "",
-            "region": pick("region", "regionName") or "",
-            "country": full_country_name, 
-            "countryCode": country_code,
-            "continent": pick("continent") or "",
+        "hostname": pick("reverse", "hostname") or reverse_dns(ip) or "",
+        "consultado_em": int(time.time()),
+        "localizacao": {
+            "cidade": pick("city") or "",
+            "regiao": pick("region", "regionName") or "",
+            "codigo_regiao": pick("regionCode") or "",
+            "pais": pick("country") or "",
+            "codigo_pais": pick("countryCode", "country") or "",
+            "continente": pick("continent") or "",
+            "codigo_continente": pick("continentCode") or "",
+            "latitude": lat,
+            "longitude": lon,
             "loc": loc,
-            "timezone": pick("timezone") or "",
+            "fuso": pick("timezone") or "",
+            "offset": pick("offset") or "",
+            "cep": pick("postal", "zip") or "",
+            "codigo_telefone": pick("country_calling_code", "callingCode") or "",
+            "bandeira": pick("countryFlag", "flag") or "",
+            "moeda": pick("currency") or "",
+            "idiomas": pick("languages") or "",
+            "e_uniao_europeia": pick("is_eu"),
         },
-        
-        "organization": {
-            "name": company_obj["name"],
-            "isp": pick("isp") or company_obj["name"],
+        "rede": {
+            "isp": pick("isp") or "",
+            "organizacao": pick("org") or "",
             "asn": asn_num,
-            "asn_name": asn_name,
-            "ip_range": safe_get(rdap_data, "handle")
+            "asn_nome": asn_name,
+            "as_string": as_field,
+            "dominio": company.get("domain") or abuse.get("domain") or "",
+            "bloco": safe_get(rdap, "handle") or "",
+            "reverso": pick("reverse") or "",
+            "consulta": pick("query") or ip,
+            "status": pick("status") or "",
+            "mensagem": pick("message") or "",
         },
-        
-        "security": {
-            "is_mobile": privacy["mobile"],
-            "is_vpn": privacy["vpn"],
-            "is_proxy": privacy["proxy"],
-            "is_hosting": privacy["hosting"],
-            "abuse_score": abuse_score
+        "organizacao": organizacao,
+        "seguranca": seguranca,
+        "contatos": contatos,
+        "rdap": {
+            "handle": rdap.get("handle"),
+            "nome": rdap.get("name"),
+            "tipo": rdap.get("type"),
+            "inicio": rdap.get("startAddress"),
+            "fim": rdap.get("endAddress"),
+            "pais": rdap.get("country"),
+            "eventos": rdap.get("events", []),
+            "observacoes": rdap.get("remarks", []),
+            "links": rdap.get("links", []),
+            "entidades": contatos["entidades"],
         },
-        
-        "whois_contacts": whois_contacts
+        "fontes": {
+            nome: {
+                "disponivel": dados is not None,
+                "vazio": dados == {},
+                "dados": dados,
+            }
+            for nome, dados in srcs.items()
+        },
     }
 
 
