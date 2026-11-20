@@ -1,4 +1,4 @@
-# IPLens
+﻿# IPLens
 
 Consulta de IP em uma tela: localização, operadora, ASN, sinais de VPN/proxy e contatos de abuso. Site e API no mesmo serviço FastAPI.
 
@@ -6,7 +6,7 @@ Consulta de IP em uma tela: localização, operadora, ASN, sinais de VPN/proxy e
 
 ## Como usar
 
-Digite um IPv4 ou IPv6 e clique em **consultar**. Também dá para clicar nos exemplos (`8.8.8.8`, `1.1.1.1`). A resposta junta dados de cinco fontes e mostra quatro cards: localização, rede, segurança e contatos. Abaixo existe o JSON completo da resposta.
+Digite um IPv4 ou IPv6 e clique em **consultar**. Também dá para clicar nos exemplos (`8.8.8.8`, `1.1.1.1`). A resposta junta dados de oito fontes e mostra quatro cards: localização, rede, segurança e contatos. Abaixo existe o JSON completo da resposta.
 
 ## API
 
@@ -48,7 +48,7 @@ GET /ping
 }
 ```
 
-Fontes consultadas: IPinfo, ipapi.co, ip-api.com, AbuseIPDB e RDAP/APNIC. Cache de 10 minutos por IP.
+Fontes consultadas: IPinfo, ipapi.co, ip-api.com, IPWho.is, IP2Location (keyless), AbuseIPDB, RDAP/APNIC e RDAP global (rdap.org). Cache de 10 minutos por IP.
 
 ## Rodando local
 

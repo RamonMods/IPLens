@@ -1,4 +1,4 @@
-/* --- IPLens: consulta de IP e montagem do dossiê. --- */
+﻿/* --- IPLens: consulta de IP e montagem do dossiê. --- */
 
 const form = document.getElementById("form-busca");
 const campoIp = document.getElementById("ip");
