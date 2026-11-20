@@ -1,0 +1,156 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IPLens — IP lookup</title>
+<meta name="description" content="Consulte um IP: localização, rede, segurança e contatos RDAP em uma só tela.">
+<meta name="theme-color" content="#0C0C0E">
+<meta name="color-scheme" content="dark">
+<link rel="canonical" href="https://ramonmods.github.io/IPLens/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="IPLens — IP lookup">
+<meta property="og:description" content="Localização, rede, segurança e contatos de qualquer IP em uma só tela.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="assets/fonts/fonts.css?v=2">
+<link rel="stylesheet" href="site.css?v=2">
+</head>
+<body>
+
+<div class="grain" aria-hidden="true"></div>
+
+<header class="topo">
+  <a class="marca" href="./"><span class="marca-marca">◎</span> IPLENS<span class="marca-ponto">/</span></a>
+  <nav>
+    <a href="#busca">buscar</a>
+    <a href="#recursos">recursos</a>
+    <a href="#api">api</a>
+  </nav>
+</header>
+
+<main>
+
+<section class="hero">
+  <div class="hero-meta"><span class="luz"></span> ip intelligence · v1.0</div>
+
+  <div class="hero-titulo">
+    <h1><span>FLEX</span><span class="bola" aria-hidden="true"></span><span class="azul">BASE</span></h1>
+    <p class="subtitulo">Um IP. Todas as camadas.</p>
+  </div>
+
+  <div class="hero-corpo">
+    <p class="lead">Localização, operadora, ASN, sinais de VPN/proxy e contatos de abuso — reunidos de cinco fontes e entregues em uma tela só.</p>
+    <div class="hero-cmd"><span class="prompt">&gt;</span> <span id="typing">consulte um ip para começar</span><span class="cursor"></span></div>
+  </div>
+
+  <div class="orb" aria-hidden="true">
+    <div class="orb-marmore"></div>
+    <div class="orb-anel"></div>
+    <div class="orb-marca">◎</div>
+    <span class="orb-legenda">geo · rede · segurança</span>
+  </div>
+</section>
+
+<section class="busca" id="busca">
+  <div class="secao-cabeca">
+    <h2>Consultar IP</h2>
+    <p>IPv4 ou IPv6. Sem login.</p>
+  </div>
+
+  <form class="form-busca" id="form-busca" autocomplete="off">
+    <label for="ip">Endereço IP</label>
+    <div class="linha-form">
+      <input id="ip" name="ip" inputmode="decimal" spellcheck="false" placeholder="8.8.8.8" required>
+      <button class="botao" type="submit">consultar <span aria-hidden="true">→</span></button>
+    </div>
+    <p class="ajuda">Exemplos: <button type="button" class="exemplo" data-ip="8.8.8.8">8.8.8.8</button> · <button type="button" class="exemplo" data-ip="1.1.1.1">1.1.1.1</button> · <button type="button" class="exemplo" data-ip="177.128.0.1">177.128.0.1</button></p>
+  </form>
+
+  <div class="aviso" id="aviso" hidden></div>
+  <div class="carregando" id="carregando" hidden><span></span> consultando cinco fontes…</div>
+
+  <section class="resultado" id="resultado" hidden>
+    <div class="resultado-barra">
+      <span><span class="ponto-verde"></span> resultado</span>
+      <span id="resultado-ip">—</span>
+    </div>
+
+    <div class="resultado-identidade">
+      <span class="resultado-selo">OK</span>
+      <div>
+        <h3 id="res-nome">—</h3>
+        <p id="res-sub">—</p>
+      </div>
+    </div>
+
+    <div class="cards" id="cards"></div>
+
+    <div class="json-linha">
+      <details class="json">
+        <summary>resposta completa em JSON</summary>
+        <pre><code id="json-resultado">{}</code></pre>
+      </details>
+      <button class="botao-copy" type="button" data-alvo="json-resultado">copiar json</button>
+    </div>
+  </section>
+</section>
+
+<section class="recursos" id="recursos">
+  <div class="secao-cabeca">
+    <h2>O que cada camada mostra</h2>
+    <p>Cinco fontes, um resultado.</p>
+  </div>
+  <div class="recursos-grade">
+    <article><span>01</span><h3>Localização</h3><p>Cidade, região, país, continente, fuso horário e coordenadas.</p></article>
+    <article><span>02</span><h3>Rede</h3><p>Hostname reverso, operadora, organização, ASN e bloco RDAP.</p></article>
+    <article><span>03</span><h3>Segurança</h3><p>Sinais de mobile, VPN, proxy, hosting e pontuação AbuseIPDB.</p></article>
+    <article><span>04</span><h3>Contatos</h3><p>E-mails e telefones de abuso e suporte técnico do bloco de IP.</p></article>
+  </div>
+</section>
+
+<section class="numeros">
+  <div><b id="n-fontes">05</b><span>fontes consultadas</span></div>
+  <div><b id="n-cache">10</b><span>minutos de cache</span></div>
+  <div><b>01</b><span>resposta unificada</span></div>
+</section>
+
+<section class="api" id="api">
+  <div class="secao-cabeca"><h2>Para quem programa</h2><p>Uma rota, JSON puro.</p></div>
+  <div class="api-grade">
+    <div class="api-lista">
+      <div><span>GET</span><code>/lookup?ip=8.8.8.8</code></div>
+      <div><span>GET</span><code>/ping</code></div>
+      <p>Token opcional via <code>Authorization: Bearer ...</code>. Cache de 10 minutos por IP.</p>
+    </div>
+    <div class="api-code">
+      <pre><code>{
+  "ip": "8.8.8.8",
+  "hostname": "dns.google",
+  "location": { "city": "Mountain View", "country": "United States" },
+  "organization": { "name": "Google LLC", "asn": "AS15169" },
+  "security": { "is_vpn": false, "abuse_score": 0 }
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="rodape">
+  <div class="rodape-topo">
+    <p>IPLens · IP lookup independente.</p>
+    <nav><a href="https://github.com/RamonMods/IPLens" target="_blank" rel="noopener">github</a><a href="https://ramonmods.github.io/" target="_blank" rel="noopener">ramonmods</a></nav>
+  </div>
+  <div class="palavra" aria-hidden="true">IPLENS</div>
+  <div class="rodape-pix">
+    <p>Se o IPLens te ajudou, um café ajuda a manter as consultas no ar.</p>
+    <a href="https://pixgg.com/ramon" target="_blank" rel="noopener">pixgg.com/ramon</a>
+  </div>
+</footer>
+
+<script src="app.js?v=2"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Core Web Framework
+fastapi
+uvicorn[standard]
+
+# Request Handling
+requests
+
+# Environment Variables
+python-dotenv
+
+# Caching
+cachetools
+
+# Type Hinting & Annotations (Built-in or generally used in modern Python, but good practice to include for clarity if specific versions are needed)
+# typing is usually built-in from Python 3.5+
+
+# Other utilities (like 'json', 'socket', 'os' are built-in)
