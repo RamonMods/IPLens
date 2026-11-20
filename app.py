@@ -206,6 +206,39 @@ def query_rdap_global(ip: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+_TOR_CACHE = {"lista": None, "ts": 0}
+
+
+def query_tor(ip: str) -> Optional[Dict[str, Any]]:
+    # --- lista de saídas Tor, atualizada no máximo a cada hora. ---
+    agora = time.time()
+    if not _TOR_CACHE["lista"] or agora - _TOR_CACHE["ts"] > 3600:
+        try:
+            r = requests.get("https://check.torproject.org/torbulkexitlist", timeout=10)
+            if r.status_code == 200:
+                _TOR_CACHE["lista"] = set(r.text.split())
+                _TOR_CACHE["ts"] = agora
+        except Exception:
+            pass
+    if not _TOR_CACHE["lista"]:
+        return None
+    return {"is_tor_exit": ip in _TOR_CACHE["lista"], "total_exits": len(_TOR_CACHE["lista"])}
+
+
+def query_spamhaus(ip: str) -> Optional[Dict[str, Any]]:
+    # --- DNSBL sem chave: resposta 127.* indica listagem. ---
+    if ":" in ip:
+        return None
+    try:
+        reverso = ".".join(reversed(ip.split("."))) + ".zen.spamhaus.org"
+        resposta = socket.gethostbyname(reverso)
+        return {"listed": True, "resposta": resposta}
+    except socket.gaierror:
+        return {"listed": False, "resposta": ""}
+    except Exception:
+        return None
+
+
 def _rdap_entidades(rdap: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Lista todas as entidades RDAP com papéis e contatos."""
     if not isinstance(rdap, dict):
@@ -245,6 +278,8 @@ def build_result(ip: str, srcs: Dict[str, Optional[Dict[str, Any]]]) -> Dict[str
     ipwho = srcs.get("ipwho") or {}
     ip2loc = srcs.get("ip2location") or {}
     abuse = safe_get(srcs.get("abuseipdb") or {}, "data") or {}
+    tor = srcs.get("tor") or {}
+    spamhaus = srcs.get("spamhaus") or {}
 
     lat = pick("latitude", "lat")
     lon = pick("longitude", "lon")
@@ -290,7 +325,11 @@ def build_result(ip: str, srcs: Dict[str, Optional[Dict[str, Any]]]) -> Dict[str
         "is_mobile": bool(pick("mobile")),
         "is_vpn": bool(privacidade.get("vpn")),
         "is_proxy": bool(pick("proxy") or privacidade.get("proxy")),
-        "is_tor": bool(privacidade.get("tor")),
+        "is_tor": bool(privacidade.get("tor") or tor.get("is_tor_exit")),
+        "tor_exit": tor.get("is_tor_exit", False),
+        "tor_total_exits": tor.get("total_exits"),
+        "spamhaus_listed": spamhaus.get("listed", False),
+        "spamhaus_resposta": spamhaus.get("resposta", ""),
         "is_relay": bool(privacidade.get("relay")),
         "is_hosting": bool(pick("hosting") or privacidade.get("hosting")),
         "abuse_score": safe_get(srcs.get("abuseipdb") or {}, "data", "abuseConfidenceScore") or 0,
@@ -402,6 +441,8 @@ def lookup_ip(ip: str) -> Dict[str, Any]:
         "ipwho": query_ipwho(ip),
         "ip2location": query_ip2location(ip),
         "abuseipdb": query_abuseipdb(ip),
+        "tor": query_tor(ip),
+        "spamhaus": query_spamhaus(ip),
         "rdap_apnic": query_rdap_apnic(ip),
         "rdap_global": query_rdap_global(ip),
     }

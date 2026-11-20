@@ -6,7 +6,7 @@ Consulta de IP em uma tela: localização, operadora, ASN, sinais de VPN/proxy e
 
 ## Como usar
 
-Digite um IPv4 ou IPv6 e clique em **consultar**. Também dá para clicar nos exemplos (`8.8.8.8`, `1.1.1.1`). A resposta junta dados de oito fontes e mostra quatro cards: localização, rede, segurança e contatos. Abaixo existe o JSON completo da resposta.
+Digite um IPv4 ou IPv6 e clique em **consultar**. Também dá para clicar nos exemplos (`8.8.8.8`, `1.1.1.1`). A resposta junta dados de dez fontes e mostra quatro cards: localização, rede, segurança e contatos. Abaixo existe o JSON completo da resposta.
 
 ## API
 
