@@ -15,8 +15,10 @@
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="assets/fonts/fonts.css?v=5">
-<link rel="stylesheet" href="site.css?v=5">
+<link rel="stylesheet" href="assets/fonts/fonts.css?v=7">
+<link rel="stylesheet" href="site.css?v=7">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 </head>
 <body>
 
@@ -67,6 +69,7 @@
       <button class="botao" type="submit">consultar <span aria-hidden="true">→</span></button>
     </div>
     <p class="ajuda">Exemplos: <button type="button" class="exemplo" data-ip="8.8.8.8">8.8.8.8</button> · <button type="button" class="exemplo" data-ip="1.1.1.1">1.1.1.1</button> · <button type="button" class="exemplo" data-ip="177.128.0.1">177.128.0.1</button></p>
+    <div class="historico" id="historico" hidden></div>
   </form>
 
   <div class="aviso" id="aviso" hidden></div>
@@ -79,10 +82,11 @@
     </div>
 
     <div class="resultado-identidade">
-      <span class="resultado-selo">OK</span>
+      <span class="resultado-selo" id="selo-risco">OK</span>
       <div>
         <h3 id="res-nome">—</h3>
         <p id="res-sub">—</p>
+        <p class="relatorio"><span id="relatorio-hora">—</span></p>
       </div>
     </div>
 

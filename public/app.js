@@ -39,6 +39,99 @@ function valorTexto(valor) {
   return String(valor);
 }
 
+let mapaAtual = null;
+let relogioAtual = null;
+
+function bandeira(codigo) {
+  if (!codigo || String(codigo).length !== 2) return "";
+  return String(codigo).toUpperCase().split("").map(c =>
+    String.fromCodePoint(127397 + c.charCodeAt(0))).join("");
+}
+
+function nivelRisco(seg) {
+  let nota = 0;
+  const motivos = [];
+  if (seg.is_vpn || seg.is_proxy || seg.is_tor || seg.is_relay) {
+    nota += 35; motivos.push("anonimato");
+  }
+  if (seg.is_hosting) { nota += 20; motivos.push("hosting"); }
+  const abuso = Number(seg.abuse_score || 0);
+  if (abuso > 50) { nota += 30; motivos.push("abuse " + abuso); }
+  if (seg.is_mobile) nota = Math.max(0, nota - 5);
+  nota = Math.max(0, Math.min(100, nota));
+  const classe = nota >= 60 ? "risco-alto" : nota >= 25 ? "risco-medio" : "risco-baixo";
+  const texto = nota >= 60 ? "ALTO" : nota >= 25 ? "MÉDIO" : "BAIXO";
+  return { nota: nota, classe: classe, texto: texto, motivos: motivos.join(", ") || "sem sinais" };
+}
+
+function iniciarRelogio(fuso) {
+  if (relogioAtual) clearInterval(relogioAtual);
+  const alvo = document.getElementById("relatorio-hora");
+  if (!alvo) return;
+  if (!fuso) { alvo.textContent = "fuso não informado"; return; }
+  const mostrarHora = () => {
+    try {
+      alvo.textContent = new Intl.DateTimeFormat("pt-BR", {
+        timeZone: fuso, hour: "2-digit", minute: "2-digit", second: "2-digit",
+      }).format(new Date()) + " no destino · " + fuso;
+    } catch (e) {
+      alvo.textContent = "fuso: " + fuso;
+    }
+  };
+  mostrarHora();
+  relogioAtual = setInterval(mostrarHora, 1000);
+}
+
+function desenharMapa(lat, lon) {
+  const el = document.getElementById("mapa");
+  if (!el) return;
+  if (!window.L || !lat || !lon || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) {
+    el.innerHTML = '<p class="sem-mapa">mapa indisponível (coordenadas ou rede ausentes)</p>';
+    return;
+  }
+  if (mapaAtual) { mapaAtual.remove(); mapaAtual = null; }
+  mapaAtual = L.map(el, { scrollWheelZoom: false }).setView([Number(lat), Number(lon)], 10);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(mapaAtual);
+  L.circleMarker([Number(lat), Number(lon)], {
+    radius: 8, color: "#2B5CFF", weight: 3, fillColor: "#2B5CFF", fillOpacity: .9,
+  }).addTo(mapaAtual);
+}
+
+function salvarHistorico(dados) {
+  try {
+    const chave = "iplens_historico";
+    const lista = JSON.parse(localStorage.getItem(chave) || "[]");
+    const anterior = lista.find(x => x.ip === dados.ip);
+    const atual = {
+      ip: dados.ip,
+      cidade: (dados.localizacao || {}).cidade || "",
+      isp: (dados.rede || {}).isp || "",
+      asn: (dados.rede || {}).asn || "",
+      ts: Date.now(),
+    };
+    const mudou = anterior && (anterior.isp !== atual.isp || anterior.asn !== atual.asn || anterior.cidade !== atual.cidade);
+    lista.unshift(atual);
+    localStorage.setItem(chave, JSON.stringify(lista.slice(0, 10)));
+    return mudou;
+  } catch (e) {
+    return false;
+  }
+}
+
+function pintarHistorico() {
+  const el = document.getElementById("historico");
+  if (!el) return;
+  let lista = [];
+  try { lista = JSON.parse(localStorage.getItem("iplens_historico") || "[]"); } catch (e) {}
+  if (!lista.length) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = "<span>recentes</span>" + lista.slice(0, 6).map(item =>
+    '<button type="button" class="chip-historico" data-ip="' + escapar(item.ip) + '">'
+    + escapar(item.ip) + "</button>").join("");
+}
+
 function mostrar(dados) {
   const loc = dados.localizacao || {};
   const rede = dados.rede || {};
@@ -46,31 +139,62 @@ function mostrar(dados) {
   const seg = dados.seguranca || {};
   const contato = dados.contatos || {};
   const rdap = dados.rdap || {};
+  const extras = dados.extras || {};
   const fontes = dados.fontes || {};
+  const bandeiraPais = bandeira(loc.codigo_pais);
+  const risco = nivelRisco(seg);
+  const mudou = salvarHistorico(dados);
 
   document.getElementById("resultado-ip").textContent = dados.ip || "—";
-  document.getElementById("res-nome").textContent = dados.hostname || dados.ip || "IP identificado";
+  document.getElementById("res-nome").textContent =
+    (bandeiraPais ? bandeiraPais + " " : "") + (dados.hostname || dados.ip || "IP identificado");
   document.getElementById("res-sub").textContent =
-    texto(loc.cidade) + " · " + texto(loc.pais) + " · " + texto(rede.asn || org.nome);
+    texto(loc.cidade) + " · " + texto(loc.pais) + " · " + texto(rede.asn || org.nome)
+    + (mudou ? " · mudou de rede" : "");
+
+  const selo = document.getElementById("selo-risco");
+  selo.textContent = "RISCO " + risco.texto;
+  selo.className = "resultado-selo " + risco.classe;
+  selo.title = risco.nota + "/100 · " + risco.motivos;
+
+  iniciarRelogio(extras.fuso_id || loc.fuso);
+
+  const timeline = (rdap.eventos || []).map(ev => {
+    const data = ev.eventDate ? new Date(ev.eventDate) : null;
+    return "<li><span>" + (data && !Number.isNaN(data.getTime()) ? data.toLocaleDateString("pt-BR") : "—")
+      + "</span>" + escapar(ev.eventAction || "evento") + "</li>";
+  }).join("");
+
+  const barras = Object.keys(fontes).map(nome => {
+    const f = fontes[nome] || {};
+    const dadosFonte = f.dados || {};
+    const campos = typeof dadosFonte === "object" ? Object.keys(dadosFonte).length : 0;
+    const largura = f.disponivel && !f.vazio ? Math.min(100, 18 + campos * 4) : 4;
+    return '<div class="barra-fonte"><span>' + escapar(nome) + "</span>"
+      + '<div class="barra"><i style="width:' + largura + '%"></i></div>'
+      + "<b>" + (f.disponivel ? (f.vazio ? "vazia" : campos + " campos") : "falhou") + "</b></div>";
+  }).join("");
 
   cards.innerHTML = [
+    '<article class="cartao cartao-mapa"><h4>Mapa</h4><div id="mapa"></div></article>',
     cartao("Localização", [
       linha("Cidade", loc.cidade),
       linha("Região", loc.regiao),
       linha("Código da região", loc.codigo_regiao),
-      linha("País", loc.pais),
+      linha("País", bandeiraPais ? bandeiraPais + " " + (loc.pais || "") : loc.pais),
       linha("Código do país", loc.codigo_pais),
       linha("Continente", loc.continente),
-      linha("Código do continente", loc.codigo_continente),
+      linha("Código do continente", extras.continente_codigo),
       linha("Latitude", loc.latitude),
       linha("Longitude", loc.longitude),
       linha("Coordenadas", loc.loc),
       linha("Fuso", loc.fuso),
+      linha("Hora no destino", extras.fuso_atual),
       linha("Offset", loc.offset),
       linha("CEP", loc.cep),
-      linha("Moeda", loc.moeda),
+      linha("Moeda", valorTexto(extras.moeda)),
       linha("Telefone", loc.codigo_telefone),
-      linha("Bandeira", loc.bandeira),
+      linha("Bandeira", extras.bandeira_emoji),
       linha("Idiomas", valorTexto(loc.idiomas)),
       linha("União Europeia", loc.e_uniao_europeia === null || loc.e_uniao_europeia === undefined
         ? "" : simNao(loc.e_uniao_europeia)),
@@ -90,6 +214,8 @@ function mostrar(dados) {
       linha("Mensagem", rede.mensagem),
     ]),
     cartao("Segurança", [
+      linha("Risco", risco.nota + "/100 (" + risco.texto + ")"),
+      linha("Motivos", risco.motivos),
       linha("Mobile", simNao(seg.is_mobile), seg.is_mobile ? "sim" : "nao"),
       linha("VPN", simNao(seg.is_vpn), seg.is_vpn ? "sim" : "nao"),
       linha("Proxy", simNao(seg.is_proxy), seg.is_proxy ? "sim" : "nao"),
@@ -111,8 +237,13 @@ function mostrar(dados) {
       linha("Tipo", org.tipo),
       linha("ASN", org.asn),
       linha("Nome ASN", org.asn_nome),
+      linha("ASN ipwho", safeObj(extras.conexao, "asn")),
+      linha("Org ipwho", safeObj(extras.conexao, "org")),
+      linha("ISP ipwho", safeObj(extras.conexao, "isp")),
+      linha("Domínio ipwho", safeObj(extras.conexao, "domain")),
       linha("Handle RDAP", org.bloco_rdap),
       linha("País RDAP", org.pais_rdap),
+      linha("Proxy ip2location", simNao(safeObj(extras.ip2location, "is_proxy"))),
     ]),
     cartao("Contatos", [
       linha("Abuso", contato.abuse_email),
@@ -131,12 +262,22 @@ function mostrar(dados) {
       linha("Observações", (rdap.observacoes || []).length),
       linha("Links", (rdap.links || []).length),
     ]),
-    cartao("Fontes", Object.keys(fontes).map((nome) =>
+    '<article class="cartao"><h4>Linha do tempo RDAP</h4>'
+      + (timeline ? '<ol class="timeline">' + timeline + "</ol>" : '<p class="vazio">sem eventos</p>')
+      + "</article>",
+    '<article class="cartao"><h4>Completude por fonte</h4>' + barras + "</article>",
+    cartao("Fontes", Object.keys(fontes).map(nome =>
       linha(nome, fontes[nome].disponivel ? (fontes[nome].vazio ? "vazia" : "ok") : "falhou"))),
   ].join("");
 
   jsonResultado.textContent = JSON.stringify(dados, null, 2);
   resultado.hidden = false;
+  pintarHistorico();
+  setTimeout(() => desenharMapa(loc.latitude, loc.longitude), 80);
+}
+
+function safeObj(obj, chave) {
+  return obj && obj[chave] !== undefined ? obj[chave] : "";
 }
 
 async function consultar(ip) {
@@ -177,6 +318,13 @@ document.querySelectorAll(".exemplo").forEach((item) => {
     campoIp.value = item.dataset.ip;
     consultar(item.dataset.ip);
   });
+});
+
+document.getElementById("historico").addEventListener("click", (evento) => {
+  const chip = evento.target.closest(".chip-historico");
+  if (!chip) return;
+  campoIp.value = chip.dataset.ip;
+  consultar(chip.dataset.ip);
 });
 
 campoIp.addEventListener("input", () => {

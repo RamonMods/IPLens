@@ -165,6 +165,47 @@ def query_rdap_apnic(ip: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def query_ipwho(ip: str) -> Optional[Dict[str, Any]]:
+    # --- fonte sem chave: geolocalização em PT-BR, conexão, moeda e bandeira. ---
+    try:
+        r = requests.get(f"https://ipwho.is/{ip}", params={"lang": "pt-BR"},
+                         headers=HEADERS, timeout=8)
+        if r.status_code == 200:
+            dados = r.json() or {}
+            if dados.get("success") is True:
+                return dados
+    except Exception:
+        pass
+    return None
+
+
+def query_ip2location(ip: str) -> Optional[Dict[str, Any]]:
+    # --- modo keyless: 1.000 consultas/dia, fonte independente. ---
+    try:
+        r = requests.get("https://api.ip2location.io/", params={"ip": ip},
+                         headers=HEADERS, timeout=8)
+        if r.status_code == 200:
+            dados = r.json() or {}
+            if not dados.get("error") and dados.get("ip"):
+                return dados
+    except Exception:
+        pass
+    return None
+
+
+def query_rdap_global(ip: str) -> Optional[Dict[str, Any]]:
+    # --- agregador RDAP: consulta automaticamente o registry correto. ---
+    try:
+        r = requests.get(f"https://rdap.org/ip/{ip}", headers=HEADERS, timeout=10)
+        if r.status_code == 200:
+            return r.json()
+        if r.status_code == 404:
+            return {}
+    except Exception:
+        pass
+    return None
+
+
 def _rdap_entidades(rdap: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Lista todas as entidades RDAP com papéis e contatos."""
     if not isinstance(rdap, dict):
@@ -197,10 +238,12 @@ def build_result(ip: str, srcs: Dict[str, Optional[Dict[str, Any]]]) -> Dict[str
                     return s[k]
         return None
 
-    rdap = srcs.get("rdap_apnic") or {}
+    rdap = srcs.get("rdap_global") or srcs.get("rdap_apnic") or {}
     ipinfo = srcs.get("ipinfo") or {}
     ipapi = srcs.get("ipapi") or {}
     ipapi_co = srcs.get("ip-api") or {}
+    ipwho = srcs.get("ipwho") or {}
+    ip2loc = srcs.get("ip2location") or {}
     abuse = safe_get(srcs.get("abuseipdb") or {}, "data") or {}
 
     lat = pick("latitude", "lat")
@@ -319,6 +362,26 @@ def build_result(ip: str, srcs: Dict[str, Optional[Dict[str, Any]]]) -> Dict[str
             "links": rdap.get("links", []),
             "entidades": contatos["entidades"],
         },
+        "extras": {
+            "tipo_ip": ipwho.get("type") or "",
+            "continente_codigo": ipwho.get("continent_code") or pick("continentCode") or "",
+            "codigo_regiao": ipwho.get("region_code") or pick("regionCode") or "",
+            "bandeira_emoji": safe_get(ipwho, "flag", "emoji") or "",
+            "bandeira_img": safe_get(ipwho, "flag", "img") or "",
+            "moeda": ipwho.get("currency") or {},
+            "fuso_atual": safe_get(ipwho, "timezone", "current_time") or "",
+            "fuso_id": ipwho.get("timezone") or pick("timezone") or "",
+            "conexao": ipwho.get("connection") or {},
+            "seguranca_ipwho": ipwho.get("security") or {},
+            "ip2location": {
+                "asn": ip2loc.get("asn") or "",
+                "as": ip2loc.get("as") or "",
+                "is_proxy": ip2loc.get("is_proxy"),
+                "time_zone": ip2loc.get("time_zone") or "",
+                "zip_code": ip2loc.get("zip_code") or "",
+                "mensagem": ip2loc.get("message") or "",
+            },
+        },
         "fontes": {
             nome: {
                 "disponivel": dados is not None,
@@ -336,8 +399,11 @@ def lookup_ip(ip: str) -> Dict[str, Any]:
         "ipinfo": query_ipinfo(ip),
         "ipapi": query_ipapi_co(ip),
         "ip-api": query_ip_api(ip),
+        "ipwho": query_ipwho(ip),
+        "ip2location": query_ip2location(ip),
         "abuseipdb": query_abuseipdb(ip),
-        "rdap_apnic": query_rdap_apnic(ip)
+        "rdap_apnic": query_rdap_apnic(ip),
+        "rdap_global": query_rdap_global(ip),
     }
     
     print(f"\n--- Final Merge Check for {ip} ---")
